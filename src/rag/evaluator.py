@@ -55,7 +55,7 @@ class ResponseEvaluator:
     def __init__(
         self,
         ollama_host: str = "http://localhost:11434",
-        model: str = "llama3.2:1b",
+        model: str = "phi3:mini",
         timeout: int = 60,
         client: Optional[OllamaClient] = None,
     ) -> None:

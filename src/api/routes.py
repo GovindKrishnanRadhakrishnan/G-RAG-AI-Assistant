@@ -23,11 +23,6 @@ retriever = AdvancedRetriever(
     cross_encoder_model=settings.CROSS_ENCODER_MODEL,
     embed_model_name=settings.EMBED_MODEL,
     run_evaluation=settings.RUN_EVALUATION,
-    enable_query_rewrite=settings.ENABLE_QUERY_REWRITE,
-    enable_rerank=settings.ENABLE_RERANK,
-    enable_compression=settings.ENABLE_COMPRESSION,
-    llm_num_predict=settings.LLM_NUM_PREDICT,
-    ollama_keep_alive=settings.OLLAMA_KEEP_ALIVE,
 )
 doc_processor = DocumentProcessor(
     chunk_size=settings.CHUNK_SIZE,
@@ -37,10 +32,6 @@ doc_processor = DocumentProcessor(
 
 class ChatRequest(BaseModel):
     question: str
-
-
-class ResetDocumentsRequest(BaseModel):
-    pin: str
 
 
 @router.post("/upload-paper")
@@ -95,8 +86,8 @@ async def chat(request: ChatRequest):
         return {
             "answer": result["answer"],
             "sources": result["sources"],
-            "faithfulness": result.get("evaluation", {}).get("faithfulness"),
-            "relevance": result.get("evaluation", {}).get("relevance"),
+            "faithfulness": result.get("evaluation", {}).get("faithfulness", 0.0),
+            "relevance": result.get("evaluation", {}).get("relevance", 0.0),
             "rewritten_query": result.get("rewritten_query"),
         }
     except Exception:
@@ -111,25 +102,3 @@ async def clear_conversation():
     """Clear conversation memory used by the RAG pipeline."""
     retriever.clear_memory()
     return {"message": "Conversation cleared", "status": "ok"}
-
-
-@router.post("/reset-documents")
-async def reset_documents(request: ResetDocumentsRequest):
-    """Delete all uploaded documents after verifying the safety PIN."""
-    if request.pin != settings.RESET_DOCUMENTS_PIN:
-        raise HTTPException(
-            status_code=403,
-            detail="Incorrect PIN. Documents were not deleted.",
-        )
-    try:
-        retriever.reset_documents()
-        return {
-            "message": "All documents have been deleted.",
-            "status": "ok",
-            "chunks_remaining": retriever.vector_store.count(),
-        }
-    except Exception:
-        raise HTTPException(
-            status_code=500,
-            detail="We couldn't reset the documents. Please try again.",
-        )
