@@ -1,4 +1,4 @@
-# G-RAG AI Assistant
+# G-RAG
 
 Local document Q&A powered by retrieval-augmented generation (RAG) and **Ollama**.
 
@@ -43,7 +43,7 @@ Optional cloud/K8s/CI assets live under `deploy/` and are **not** required for l
 
 - Python 3.11+
 - [Ollama](https://ollama.com/) installed and running
-- A chat model pulled locally (default: `tinyllama` for low-RAM machines)
+- A chat model pulled locally (default: `phi3:mini`)
 
 ---
 
@@ -67,13 +67,11 @@ cp .env.example .env
 ## Ollama Setup
 
 1. Install and start Ollama.
-2. Pull the model configured in `.env` (default `tinyllama` on low-RAM machines):
+2. Pull the model configured in `.env` (default `phi3:mini`):
 
 ```bash
-ollama pull tinyllama
+ollama pull phi3:mini
 ```
-
-> **Note:** `phi3:mini` needs ~5 GiB free memory. On a ~6 GB machine it will fail with an Ollama memory error. Use `tinyllama` (or another small model) unless you have enough free RAM.
 
 3. Confirm Ollama is reachable at `http://localhost:11434`.
 
@@ -86,14 +84,10 @@ Copy `.env.example` to `.env`. Important settings:
 | Variable | Purpose | Default |
 |----------|---------|---------|
 | `OLLAMA_HOST` | Ollama base URL | `http://localhost:11434` |
-| `OLLAMA_MODEL` | Chat / rewrite / eval model | `tinyllama` |
+| `OLLAMA_MODEL` | Chat / rewrite / eval model | `phi3:mini` |
 | `VECTOR_DB_PATH` | Chroma persistence path | `vector_db` |
 | `CHUNK_SIZE` / `CHUNK_OVERLAP` | PDF chunking | `1000` / `200` |
-| `TOP_K_RETRIEVAL` / `TOP_K_FINAL` | Retrieval depth | `6` / `3` |
-| `ENABLE_RERANK` | Cross-encoder re-rank (slower, higher quality) | `false` |
-| `ENABLE_COMPRESSION` | Sentence compression | `false` |
-| `ENABLE_QUERY_REWRITE` | Extra Ollama rewrite call | `false` |
-| `LLM_NUM_PREDICT` | Max answer tokens | `192` |
+| `TOP_K_RETRIEVAL` / `TOP_K_FINAL` | Retrieval depth | `10` / `5` |
 
 Do not commit `.env`.
 
@@ -119,7 +113,7 @@ Open: [http://127.0.0.1:8001](http://127.0.0.1:8001)
 
 ```bash
 docker compose up --build
-docker exec -it grag-ollama ollama run tinyllama
+docker exec -it grag-ollama ollama run phi3:mini
 ```
 
 App: [http://localhost:8001](http://localhost:8001)

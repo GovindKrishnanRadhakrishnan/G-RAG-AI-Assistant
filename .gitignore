@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Python
 __pycache__/
 *.py[cod]
@@ -48,3 +49,55 @@ huggingface/
 
 # Note: vector_db/ is currently tracked to preserve existing data.
 # Do not delete it. Future cleanup may gitignore new runtime writes.
+=======
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment variables
+.env
+
+# Logs / local scratch
+*.log
+
+# Local development
+.DS_Store
+Thumbs.db
+
+# Model / cache
+.cache/
+huggingface/
+
+# Note: vector_db/ is currently tracked to preserve existing data.
+# Do not delete it. Future cleanup may gitignore new runtime writes.
+>>>>>>> 05bd88c (feat: brand as G-RAG and keep HTML+FastAPI as sole UI)

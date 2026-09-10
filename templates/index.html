@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>G-RAG AI Assistant</title>
-  <meta name="description" content="G-RAG AI Assistant — ask questions about your documents with local Ollama." />
+  <title>G-RAG</title>
+  <meta name="description" content="G-RAG — ask questions about your documents with local Ollama." />
   <style>
     :root {
       --sidebar-w: 280px;
@@ -225,88 +225,6 @@
     }
     .icon-btn:hover { background: var(--surface2); border-color: var(--border-hover); color: var(--text); }
     .icon-btn svg { width: 15px; height: 15px; }
-    .icon-btn.reset-btn {
-      width: auto;
-      height: 32px;
-      padding: 0 10px;
-      gap: 6px;
-      font-size: 12px;
-      font-weight: 600;
-    }
-    .icon-btn.reset-btn:hover {
-      background: rgba(239,68,68,0.12);
-      border-color: rgba(239,68,68,0.35);
-      color: #f87171;
-    }
-
-    /* Reset PIN modal */
-    .modal-backdrop {
-      position: fixed; inset: 0;
-      background: rgba(0,0,0,0.55);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-      padding: 16px;
-    }
-    .modal-backdrop.open { display: flex; }
-    .modal-card {
-      width: 100%;
-      max-width: 360px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--r-lg);
-      padding: 20px;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.45);
-    }
-    .modal-card h3 {
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 6px;
-      color: var(--text);
-    }
-    .modal-card p {
-      font-size: 13px;
-      color: var(--text-2);
-      margin-bottom: 14px;
-      line-height: 1.45;
-    }
-    .modal-card input {
-      width: 100%;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: var(--r-md);
-      color: var(--text);
-      padding: 10px 12px;
-      font-size: 14px;
-      outline: none;
-      letter-spacing: 0.2em;
-      text-align: center;
-    }
-    .modal-card input:focus { border-color: var(--accent); }
-    .modal-actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 14px;
-      justify-content: flex-end;
-    }
-    .modal-actions button {
-      border-radius: var(--r-md);
-      border: 1px solid var(--border);
-      padding: 8px 14px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .modal-cancel { background: transparent; color: var(--text-2); }
-    .modal-cancel:hover { background: var(--surface2); color: var(--text); }
-    .modal-confirm {
-      background: rgba(239,68,68,0.15);
-      border-color: rgba(239,68,68,0.35);
-      color: #f87171;
-    }
-    .modal-confirm:hover { background: rgba(239,68,68,0.25); }
-    .modal-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
 
     /* Chat area */
     .chat-area {
@@ -500,7 +418,7 @@
       </svg>
     </div>
     <div>
-      <div class="logo-text">G-RAG AI Assistant</div>
+      <div class="logo-text">G-RAG</div>
       <div class="logo-sub">Local document Q&amp;A</div>
     </div>
   </div>
@@ -568,13 +486,6 @@
       </span>
     </div>
     <div class="topbar-right">
-      <button class="icon-btn reset-btn" id="resetDocsBtn" title="Reset all documents">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="1 4 1 10 7 10"/>
-          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-        </svg>
-        Reset
-      </button>
       <button class="icon-btn" id="clearChatBtn" title="Clear chat">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
@@ -619,19 +530,6 @@
 </div>
 
 <div id="toasts"></div>
-
-<!-- Reset documents PIN modal -->
-<div class="modal-backdrop" id="resetModal" aria-hidden="true">
-  <div class="modal-card" role="dialog" aria-labelledby="resetTitle">
-    <h3 id="resetTitle">Reset all documents?</h3>
-    <p>This permanently deletes every uploaded document from G-RAG. Enter the safety PIN to continue.</p>
-    <input type="password" id="resetPin" maxlength="8" placeholder="Enter PIN" autocomplete="off" />
-    <div class="modal-actions">
-      <button type="button" class="modal-cancel" id="resetCancelBtn">Cancel</button>
-      <button type="button" class="modal-confirm" id="resetConfirmBtn">Reset</button>
-    </div>
-  </div>
-</div>
 
 <script>
   const $ = id => document.getElementById(id);
@@ -789,7 +687,7 @@
 
   function fillMsg({wrap, txt, body}, text, sources, faith, rel) {
     txt.textContent = text;
-    if (typeof faith === 'number' && typeof rel === 'number') {
+    if (faith!=null && rel!=null) {
       const b = document.createElement('div'); b.className='badges';
       b.innerHTML = badge(faith,'Faithful')+badge(rel,'Relevant');
       body.appendChild(b);
@@ -829,73 +727,6 @@
     chatInner.querySelectorAll('.message').forEach(e=>e.remove());
     welcome.style.display=''; toast('Conversation cleared','inf');
     fetch('/api/v1/clear',{method:'POST'}).catch(()=>{});
-  });
-
-  // ── Reset all documents (PIN protected) ──
-  const resetModal = $('resetModal');
-  const resetPin = $('resetPin');
-  const resetConfirmBtn = $('resetConfirmBtn');
-
-  function openResetModal() {
-    resetPin.value = '';
-    resetModal.classList.add('open');
-    resetModal.setAttribute('aria-hidden', 'false');
-    setTimeout(() => resetPin.focus(), 50);
-  }
-  function closeResetModal() {
-    resetModal.classList.remove('open');
-    resetModal.setAttribute('aria-hidden', 'true');
-    resetPin.value = '';
-  }
-
-  $('resetDocsBtn').addEventListener('click', openResetModal);
-  $('resetCancelBtn').addEventListener('click', closeResetModal);
-  resetModal.addEventListener('click', (e) => {
-    if (e.target === resetModal) closeResetModal();
-  });
-  resetPin.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') resetConfirmBtn.click();
-    if (e.key === 'Escape') closeResetModal();
-  });
-
-  resetConfirmBtn.addEventListener('click', async () => {
-    const pin = resetPin.value.trim();
-    if (!pin) {
-      toast('Enter the safety PIN', 'err');
-      resetPin.focus();
-      return;
-    }
-    resetConfirmBtn.disabled = true;
-    try {
-      const res = await fetch('/api/v1/reset-documents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast(data.detail || 'Incorrect PIN', 'err');
-        resetPin.value = '';
-        resetPin.focus();
-        return;
-      }
-      chunks = 0; files = 0;
-      $('mChunks').textContent = '0';
-      $('mFiles').textContent = '0';
-      setFb('info', 'No documents yet. Upload a PDF to get started.');
-      chatInner.querySelectorAll('.message').forEach(e => e.remove());
-      welcome.style.display = '';
-      fileIn.value = '';
-      dropZone.classList.remove('ok');
-      $('fname').textContent = '';
-      $('fname').style.display = 'none';
-      closeResetModal();
-      toast('All documents deleted', 'ok');
-    } catch (e) {
-      toast('Could not reset documents. Try again.', 'err');
-    } finally {
-      resetConfirmBtn.disabled = false;
-    }
   });
 
   // ── Util ──

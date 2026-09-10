@@ -32,17 +32,8 @@ services:
     environment:
       - OLLAMA_HOST=http://ollama:11434
       - VECTOR_DB_PATH=/app/vector_db
-      - PROJECT_NAME=G-RAG AI Assistant
+      - PROJECT_NAME=G-RAG
       - VERSION=2.1.0
-      - OLLAMA_MODEL=llama3.2:1b
-      - OLLAMA_KEEP_ALIVE=10m
-      - LLM_NUM_PREDICT=192
-      - TOP_K_RETRIEVAL=6
-      - TOP_K_FINAL=3
-      - ENABLE_QUERY_REWRITE=false
-      - ENABLE_RERANK=false
-      - ENABLE_COMPRESSION=false
-      - RUN_EVALUATION=false
     volumes:
       - vector_db_data:/app/vector_db
       - hf_cache:/home/appuser/.cache/huggingface
