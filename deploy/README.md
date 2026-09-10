@@ -21,7 +21,7 @@ docker compose up --build
 Then pull a model into Ollama:
 
 ```bash
-docker exec -it grag-ollama ollama run tinyllama
+docker exec -it grag-ollama ollama run phi3:mini
 ```
 
 Open the app at `http://localhost:8001`.
