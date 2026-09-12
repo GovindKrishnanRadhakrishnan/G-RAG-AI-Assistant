@@ -40,7 +40,7 @@ class QueryRewriter:
     def __init__(
         self,
         ollama_host: str = "http://localhost:11434",
-        model: str = "phi3:mini",
+        model: str = "llama3.2:1b",
         timeout: int = 30,
         client: Optional[OllamaClient] = None,
     ) -> None:
@@ -53,7 +53,13 @@ class QueryRewriter:
         if not query or not query.strip():
             return query
 
-        prompt = REWRITE_PROMPT.format(query=query.strip())
+        original = query.strip()
+        # Short questions (e.g. "who is govind") are already good search queries.
+        # Rewriting them with a small local model often drops the key name.
+        if len(original.split()) <= 6:
+            return original
+
+        prompt = REWRITE_PROMPT.format(query=original)
 
         try:
             rewritten = self.client.generate(
@@ -69,8 +75,16 @@ class QueryRewriter:
                     rewritten,
                     flags=re.IGNORECASE,
                 ).strip()
-                return rewritten if rewritten else query
+                if not rewritten:
+                    return original
+
+                # If the rewrite drops distinctive tokens from the original, keep original
+                orig_tokens = set(re.findall(r"[A-Za-z0-9]{3,}", original.lower()))
+                rew_tokens = set(re.findall(r"[A-Za-z0-9]{3,}", rewritten.lower()))
+                if orig_tokens - rew_tokens:
+                    return original
+                return rewritten
         except OllamaError:
             pass
 
-        return query
+        return original
