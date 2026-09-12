@@ -1,0 +1,55 @@
+{{- if .Values.ollama.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "rag.fullname" . }}-ollama
+  labels:
+    {{- include "rag.labels" . | nindent 4 }}
+    app: {{ include "rag.name" . }}-ollama
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "rag.name" . }}-ollama
+  template:
+    metadata:
+      labels:
+        app: {{ include "rag.name" . }}-ollama
+    spec:
+      containers:
+        - name: ollama
+          image: "{{ .Values.ollama.image.repository }}:{{ .Values.ollama.image.tag }}"
+          imagePullPolicy: {{ .Values.ollama.image.pullPolicy }}
+          ports:
+            - containerPort: 11434
+              name: ollama-port
+          resources:
+            {{- toYaml .Values.ollama.resources | nindent 12 }}
+          volumeMounts:
+            - name: ollama-storage
+              mountPath: /root/.ollama
+      volumes:
+        - name: ollama-storage
+        {{- if .Values.ollama.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "rag.fullname" . }}-ollama-pvc
+        {{- else }}
+          emptyDir: {}
+        {{- end }}
+{{- end }}
+---
+{{- if and .Values.ollama.enabled .Values.ollama.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "rag.fullname" . }}-ollama-pvc
+  labels:
+    {{- include "rag.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.ollama.persistence.size }}
+  storageClassName: {{ .Values.ollama.persistence.storageClass }}
+{{- end }}

@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "rag.fullname" . }}-frontend
+  labels:
+    {{- include "rag.labels" . | nindent 4 }}
+    app: {{ include "rag.name" . }}-frontend
+spec:
+  replicas: {{ .Values.frontend.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "rag.name" . }}-frontend
+  template:
+    metadata:
+      labels:
+        app: {{ include "rag.name" . }}-frontend
+    spec:
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: frontend
+          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+          command: ["streamlit", "run", "app.py", "--server.port", "8501", "--server.address", "0.0.0.0"]
+          ports:
+            - containerPort: 8501
+              name: http-frontend
+          envFrom:
+            - configMapRef:
+                name: {{ include "rag.fullname" . }}-config
+          env:
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rag.fullname" . }}-secrets
+                  key: OPENAI_API_KEY
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rag.fullname" . }}-secrets
+                  key: ANTHROPIC_API_KEY
+          resources:
+            {{- toYaml .Values.frontend.resources | nindent 12 }}
+          # Simple TCP check for Streamlit readiness
+          readinessProbe:
+            tcpSocket:
+              port: 8501
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: vector-db-storage
+              mountPath: /app/vector_db
+      volumes:
+        - name: vector-db-storage
+          emptyDir: {}

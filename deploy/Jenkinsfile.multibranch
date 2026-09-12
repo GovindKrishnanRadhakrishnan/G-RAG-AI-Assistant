@@ -1,0 +1,161 @@
+// ==============================================================================
+// Jenkinsfile.multibranch - Hybrid Declarative + Scripted Groovy Pipeline
+// ==============================================================================
+
+// Simulate loading a Shared Library (MLOps standard for reusable pipelines)
+def sharedLib = [:]
+sharedLib.ecrLogin = { region, registry ->
+    sh "aws ecr get-login-password --region ${region} | docker login --username AWS --password-stdin ${registry}"
+}
+
+pipeline {
+    agent any
+
+    parameters {
+        choice(name: 'DEPLOY_ENV', choices: ['dev', 'staging', 'prod'], description: 'Target environment for deployment')
+    }
+
+    environment {
+        AWS_DEFAULT_REGION = 'us-east-1'
+        ECR_REPO_NAME      = 'rag-research-assistant'
+        AWS_ACCOUNT_ID     = '123456789012'
+        ECR_REGISTRY       = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+        IMAGE_NAME         = "${ECR_REGISTRY}/${ECR_REPO_NAME}"
+        IMAGE_TAG          = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
+        SLACK_CHANNEL      = '#deployments'
+    }
+
+    stages {
+        // =====================================================================
+        // 1. Parallel Verification (Ruff + pytest)
+        // =====================================================================
+        stage('Parallel Tests') {
+            parallel {
+                stage('Linter') {
+                    steps {
+                        sh 'pip install ruff black && ruff check . && black --check .'
+                    }
+                }
+                stage('Unit Tests') {
+                    steps {
+                        sh 'pip install -r requirements.txt && pytest tests/'
+                    }
+                }
+            }
+        }
+
+        // =====================================================================
+        // 2. Build Container Image
+        // =====================================================================
+        stage('Docker Build') {
+            steps {
+                script {
+                    // Call a reusable Groovy function
+                    buildDockerImage(IMAGE_NAME, IMAGE_TAG)
+                }
+            }
+        }
+
+        // =====================================================================
+        // 3. Branch-Specific Flow
+        // =====================================================================
+        stage('Publish & Deploy') {
+            steps {
+                script {
+                    // Scripted Groovy block for branch evaluation
+                    if (env.BRANCH_NAME == 'main') {
+                        echo "Main branch detected. Proceeding to Publish and Deploy."
+                        
+                        // 1. ECR Login via Shared Library simulation
+                        sharedLib.ecrLogin(AWS_DEFAULT_REGION, ECR_REGISTRY)
+                        
+                        // 2. Push Image
+                        sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
+                        sh "docker push ${IMAGE_NAME}:latest"
+                        
+                        // 3. Deploy based on DEPLOY_ENV parameter
+                        String targetIP = getTargetIP(params.DEPLOY_ENV)
+                        deployToEC2(targetIP, IMAGE_NAME, IMAGE_TAG)
+                        
+                    } else {
+                        echo "Feature branch '${env.BRANCH_NAME}' detected. Skipping ECR push and Deployment."
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            script {
+                if (env.BRANCH_NAME == 'main') {
+                    slackNotify('SUCCESSFUL', 'good')
+                }
+            }
+        }
+        failure {
+            script {
+                slackNotify('FAILED', 'danger')
+            }
+        }
+    }
+}
+
+// ==============================================================================
+// Reusable Groovy Functions (Scripted Logic)
+// ==============================================================================
+
+/**
+ * Builds the Docker image.
+ */
+def buildDockerImage(String imageName, String tag) {
+    echo "Building Docker Image: ${imageName}:${tag}"
+    sh "docker build -t ${imageName}:${tag} -t ${imageName}:latest ."
+}
+
+/**
+ * Maps environment name to target EC2 IP.
+ */
+def getTargetIP(String environment) {
+    switch (environment) {
+        case 'prod':
+            return '54.210.35.42' // Production IP
+        case 'staging':
+            return '34.201.12.98' // Staging IP
+        default:
+            return '3.95.84.110'   // Development IP
+    }
+}
+
+/**
+ * Deploys the application to the target EC2 instance via SSH and Docker Compose.
+ */
+def deployToEC2(String ip, String imageName, String tag) {
+    echo "Deploying to ${ip} with image tag ${tag}..."
+    withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
+        sh """
+            scp -i ${SSH_KEY} -o StrictHostKeyChecking=no docker-compose.yml ${SSH_USER}@${ip}:/home/${SSH_USER}/docker-compose.yml
+            ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${SSH_USER}@${ip} \"\"\"
+                aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                echo "BACKEND_IMAGE=${imageName}:${tag}" > .env
+                echo "FRONTEND_IMAGE=${imageName}:${tag}" >> .env
+                docker compose pull
+                docker compose up -d
+            \"\"\"
+        """
+    }
+}
+
+/**
+ * Sends a Slack notification.
+ */
+def slackNotify(String status, String color) {
+    slackSend(
+        channel: env.SLACK_CHANNEL,
+        color: color,
+        message: "${status}: Job '${env.JOB_NAME}' [build #${env.BUILD_NUMBER}] on branch ${env.BRANCH_NAME}."
+    )
+}

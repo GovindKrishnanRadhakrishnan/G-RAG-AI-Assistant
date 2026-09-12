@@ -1,0 +1,171 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_DEFAULT_REGION = 'us-east-1'
+        ECR_REPO_NAME      = 'rag-research-assistant'
+        AWS_ACCOUNT_ID     = '123456789012' // Replace with your AWS Account ID
+        ECR_REGISTRY       = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+        IMAGE_NAME         = "${ECR_REGISTRY}/${ECR_REPO_NAME}"
+        IMAGE_TAG          = "${env.BUILD_NUMBER}-${env.GIT_COMMIT[0..7]}"
+        EC2_PUBLIC_IP      = '54.210.35.42' // Replace with your EC2 Elastic IP
+        SLACK_CREDENTIALS  = 'slack-webhook-url'
+    }
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        keepPipelineBuilds(10)
+        ansiColor('xterm')
+    }
+
+    stages {
+        // =====================================================================
+        // 1. Lint and Format Check
+        // =====================================================================
+        stage('Lint & Format') {
+            steps {
+                sh '''
+                    pip install ruff black
+                    ruff check .
+                    black --check .
+                '''
+            }
+        }
+
+        // =====================================================================
+        // 2. Run Unit & Integration Tests
+        // =====================================================================
+        stage('Run Tests') {
+            steps {
+                sh '''
+                    pip install -r requirements.txt
+                    pytest tests/
+                '''
+            }
+        }
+
+        // =====================================================================
+        // 3. Build Multi-Stage Docker Image
+        // =====================================================================
+        stage('Docker Build') {
+            steps {
+                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} -t ${IMAGE_NAME}:latest ."
+            }
+        }
+
+        // =====================================================================
+        // 4. Push Image to AWS ECR
+        // =====================================================================
+        stage('Push to ECR') {
+            steps {
+                // Authenticate with AWS ECR using Jenkins credentials
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
+                    sh '''
+                        aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                        docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                        docker push ${IMAGE_NAME}:latest
+                    '''
+                }
+            }
+        }
+
+        // =====================================================================
+        // 5. Deploy to EC2 via Docker Compose
+        // =====================================================================
+        stage('Deploy to EC2') {
+            steps {
+                // Use SSH credentials to connect to the EC2 instance and update the container
+                withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
+                    sh '''
+                        # Copy docker-compose.yml to the EC2 instance
+                        scp -i ${SSH_KEY} -o StrictHostKeyChecking=no docker-compose.yml ${SSH_USER}@${EC2_PUBLIC_IP}:/home/${SSH_USER}/docker-compose.yml
+                        
+                        # Execute deployment commands on the EC2 instance
+                        ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${SSH_USER}@${EC2_PUBLIC_IP} """
+                            # Log in to ECR on the host
+                            aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                            
+                            # Backup current configuration
+                            if [ -f .env ]; then cp .env .env.bak; fi
+                            
+                            # Write new environment variables
+                            echo "OLLAMA_HOST=http://localhost:11434" > .env
+                            echo "VECTOR_DB_PATH=/app/vector_db" >> .env
+                            echo "BACKEND_IMAGE=${IMAGE_NAME}:${IMAGE_TAG}" >> .env
+                            echo "FRONTEND_IMAGE=${IMAGE_NAME}:${IMAGE_TAG}" >> .env
+                            
+                            # Pull and run
+                            docker compose pull
+                            docker compose up -d
+                        """
+                    '''
+                }
+            }
+        }
+
+        // =====================================================================
+        // 6. Post-Deployment Health Check
+        // =====================================================================
+        stage('Health Check') {
+            steps {
+                script {
+                    echo "Starting health check on http://${EC2_PUBLIC_IP}:8001/health"
+                    // Wait for the backend to start up
+                    sleep(time: 15, unit: 'SECONDS')
+                    
+                    // Probe the health endpoint (up to 3 times)
+                    int retries = 3
+                    boolean isHealthy = false
+                    
+                    for (int i = 0; i < retries; i++) {
+                        try {
+                            def response = sh(script: "curl -s -o /dev/null -w '%{http_code}' http://${EC2_PUBLIC_IP}:8001/health", returnStdout: true).trim()
+                            if (response == "200") {
+                                isHealthy = true
+                                echo "Backend is healthy! Status code: 200"
+                                break
+                            }
+                            echo "Health check attempt ${i+1} returned: ${response}. Retrying..."
+                        } catch (Exception e) {
+                            echo "Error reaching health endpoint: ${e.message}. Retrying..."
+                        }
+                        sleep(time: 10, unit: 'SECONDS')
+                    }
+                    
+                    if (!isHealthy) {
+                        error("Deployment Health Check FAILED. Initiating rollback...")
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            script {
+                slackSend(channel: '#deployments', color: 'good', message: "SUCCESSFUL: Job '${env.JOB_NAME}' [build #${env.BUILD_NUMBER}] RAG App deployed successfully to EC2 (${EC2_PUBLIC_IP})")
+            }
+        }
+        failure {
+            script {
+                echo "Deployment failed. Triggering rollback..."
+                // Rollback Stage: Restore the backup .env file and run docker compose up -d
+                withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
+                    sh '''
+                        ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${SSH_USER}@${EC2_PUBLIC_IP} """
+                            if [ -f .env.bak ]; then
+                                echo "Restoring backup environment variables..."
+                                mv .env.bak .env
+                                docker compose up -d
+                                echo "Rollback complete."
+                            else
+                                echo "No backup configuration (.env.bak) found. Cannot rollback automatically."
+                            fi
+                        """
+                    '''
+                }
+                slackSend(channel: '#deployments', color: 'danger', message: "FAILED: Job '${env.JOB_NAME}' [build #${env.BUILD_NUMBER}] RAG App deployment failed. Rolled back to previous version.")
+            }
+        }
+    }
+}

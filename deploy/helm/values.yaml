@@ -1,0 +1,112 @@
+# ==============================================================================
+# Default Values for RAG Research Assistant
+# ==============================================================================
+
+global:
+  environment: dev
+
+# --- FastAPI Backend Settings ---
+backend:
+  replicaCount: 1
+  image:
+    repository: rag-research-assistant # Replace with your ECR URL in production
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8001
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  hpa:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: 80
+  env:
+    ollamaHost: "http://rag-ollama-service:11434"
+    vectorDbPath: "/app/vector_db"
+
+# --- Streamlit Frontend Settings ---
+frontend:
+  replicaCount: 1
+  image:
+    repository: rag-research-assistant # Replace with your ECR URL in production
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8501
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  hpa:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 80
+  env:
+    ollamaHost: "http://rag-ollama-service:11434"
+    vectorDbPath: "/app/vector_db"
+
+# --- Ollama Local LLM Settings ---
+ollama:
+  enabled: true
+  image:
+    repository: ollama/ollama
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 11434
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "1000m"
+    limits:
+      memory: "4Gi"
+      cpu: "2000m"
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: "standard" # hostpath/standard for local K8s (Minikube/K3s)
+
+# --- Ingress Settings ---
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: rag-api.local
+      paths:
+        - path: /
+          pathType: Prefix
+          backendName: backend
+          backendPort: 8001
+    - host: rag-app.local
+      paths:
+        - path: /
+          pathType: Prefix
+          backendName: frontend
+          backendPort: 8501
+  tls:
+    - secretName: rag-assistant-tls
+      hosts:
+        - rag-api.local
+        - rag-app.local
+
+# --- Secret Keys ---
+secrets:
+  openaiApiKey: ""
+  anthropicApiKey: ""

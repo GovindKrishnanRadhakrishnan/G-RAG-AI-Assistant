@@ -1,0 +1,17 @@
+# ==============================================================================
+# Prometheus Custom Helm Values
+# ==============================================================================
+
+prometheusSpec:
+  # Additional scrape configs for non-Kubernetes or custom endpoints
+  additionalScrapeConfigs:
+    - job_name: 'rag-backend-local'
+      static_configs:
+        - targets: ['backend:8001']
+          labels:
+            environment: 'local'
+
+  # Configure Prometheus to scrape pods that have Prometheus annotations
+  ruleSelectorNilUsesHelmValues: false
+  serviceMonitorSelectorNilUsesHelmValues: false
+  podMonitorSelectorNilUsesHelmValues: false

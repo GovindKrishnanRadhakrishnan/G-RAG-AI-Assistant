@@ -1,0 +1,26 @@
+# ==============================================================================
+# Grafana Custom Helm Values (Dashboard Provisioning)
+# ==============================================================================
+
+adminPassword: "admin" # Replace in production
+
+# Automatically mount and load the custom dashboard
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: 'rag-dashboards'
+        orgId: 1
+        folder: 'MLOps'
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/mlops
+
+dashboards:
+  mlops:
+    rag-assistant:
+      # Load the JSON dashboard from the configmap/secret or local volume mount
+      json: |
+        # CUSTOM_DASHBOARD_JSON_PLACEHOLDER
