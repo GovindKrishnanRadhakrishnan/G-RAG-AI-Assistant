@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # Ollama - Local LLM
+  # ---------------------------------------------------------------------------
+  ollama:
+    image: ollama/ollama:latest
+    container_name: grag-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # G-RAG - FastAPI + HTML UI
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: grag-app
+    command: uvicorn main:app --host 0.0.0.0 --port 8001
+    ports:
+      - "8001:8001"
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - VECTOR_DB_PATH=/app/vector_db
+      - PROJECT_NAME=G-RAG AI Assistant
+      - VERSION=2.1.0
+      - OLLAMA_MODEL=llama3.2:1b
+      - OLLAMA_KEEP_ALIVE=10m
+      - LLM_NUM_PREDICT=192
+      - TOP_K_RETRIEVAL=6
+      - TOP_K_FINAL=3
+      - ENABLE_QUERY_REWRITE=false
+      - ENABLE_RERANK=false
+      - ENABLE_COMPRESSION=false
+      - RUN_EVALUATION=false
+    volumes:
+      - vector_db_data:/app/vector_db
+      - hf_cache:/home/appuser/.cache/huggingface
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  vector_db_data:
+    driver: local
+  hf_cache:
+    driver: local
+  ollama_data:
+    driver: local
